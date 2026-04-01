@@ -37,7 +37,7 @@ def get_main_menu_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_start_menu_text(user_name):
-    """Стартовое приветственное меню"""
+    """Стартовое приветственное меню (при /start)"""
     return (
         f"✨ *Добро пожаловать, {user_name}!* ✨\n\n"
         f"🌟 Я — *Бот-предсказатель* 🌟\n"
@@ -50,13 +50,17 @@ def get_start_menu_text(user_name):
     )
 
 def get_main_menu_text(user_name):
-    """Основное меню для возврата"""
+    """Основное меню для возврата (такое же красивое, как стартовое)"""
     return (
         f"🔙 *Главное меню*\n\n"
-        f"✨ *{user_name}*, вы вернулись в главное меню.\n\n"
+        f"✨ *Добро пожаловать обратно, {user_name}!* ✨\n\n"
         f"🌟 Я — *Бот-предсказатель* 🌟\n"
-        f"🔮 Я здесь, чтобы помочь вам заглянуть в будущее.\n\n"
-        f"💎 *Нажмите кнопку, чтобы получить новое предсказание* 👇"
+        f"🔮 Ваш личный проводник в мир тайн и вдохновения.\n\n"
+        f"💎 *Что вы получите всего за 0.10 USDT?*\n"
+        f"• 🎯 *Персональное предсказание* – ответ на ваш вопрос\n"
+        f"• 🌙 *Юмористический гороскоп* – шутливый взгляд на день\n"
+        f"• 💫 *Заряд позитива* – энергия на весь день\n\n"
+        f"👇 *Нажмите кнопку, чтобы получить новое предсказание* 👇"
     )
 
 def register_handlers(application):
@@ -326,12 +330,11 @@ async def back_to_menu_callback(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = query.from_user.id
     user_info = get_user(user_id)
     if user_info:
-        # user_info структура: (user_id, username, first_name, last_name, ...)
         user_name = user_info[2]  # first_name
     else:
         user_name = query.from_user.first_name
     
-    # Отправляем основное меню
+    # Отправляем красивое основное меню
     await context.bot.send_message(
         chat_id=query.from_user.id,
         text=get_main_menu_text(user_name),
@@ -355,7 +358,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_name = update.effective_user.first_name
 
     await update.message.reply_text(
-        f"❌ *Операция отменена*\n\n{get_main_menu_text(user_name)}",
+        get_main_menu_text(user_name),
         parse_mode='Markdown',
         reply_markup=get_main_menu_keyboard()
     )
