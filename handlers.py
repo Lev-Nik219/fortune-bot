@@ -62,9 +62,22 @@ def get_main_menu_text(user_name):
 
 def register_handlers(application):
     """Регистрация всех обработчиков"""
-    logger.info("Registering all handlers...")
+    logger.info("=" * 50)
+    logger.info("REGISTERING HANDLERS")
+    logger.info("=" * 50)
     
-    # Основной ConversationHandler
+    # Регистрируем команды
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('help', help_command))
+    application.add_handler(CommandHandler('predict', predict))
+    
+    # Регистрируем обработчик для кнопки
+    application.add_handler(MessageHandler(filters.Regex('^🔮 Получить предсказание$'), predict))
+    
+    # Регистрируем обработчик для возврата в меню
+    application.add_handler(CallbackQueryHandler(back_to_menu_callback, pattern='^back_to_menu$'))
+    
+    # Регистрируем ConversationHandler
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler('predict', predict),
@@ -79,19 +92,14 @@ def register_handlers(application):
         fallbacks=[CommandHandler('cancel', cancel)],
         allow_reentry=True
     )
-    
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler('help', help_command))
     application.add_handler(conv_handler)
-    application.add_handler(CallbackQueryHandler(back_to_menu_callback, pattern='^back_to_menu$'))
-    application.add_handler(MessageHandler(filters.Regex('^🔮 Получить предсказание$'), predict))
     
     logger.info("All handlers registered successfully")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     create_user(user.id, user.username, user.first_name, user.last_name)
-    logger.info(f"User {user.id} started")
+    logger.info(f"Start command from user {user.id}")
 
     await update.message.reply_text(
         get_start_menu_text(user.first_name),
@@ -102,6 +110,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_data_store[user_id] = {}
+    logger.info(f"Predict started for user {user_id}")
+    
     await update.message.reply_text(
         "✨ *Создаём ваше персональное предсказание* ✨\n\n"
         "📝 *Как вас зовут?* (можно указать имя или псевдоним)",
@@ -113,6 +123,7 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.message.text.strip()
     user_data_store[user_id]['name'] = user_name
+    logger.info(f"User {user_id} entered name: {user_name}")
 
     await update.message.reply_text(
         f"🌟 *Приятно познакомиться, {user_name}!* 🌟\n\n"
@@ -138,6 +149,7 @@ async def ask_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_data_store[user_id]['gender'] = gender
     user_data_store[user_id]['gender_emoji'] = gender_emoji
+    logger.info(f"User {user_id} selected gender: {gender}")
 
     await update.message.reply_text(
         f"{gender_emoji} *Принято!*\n\n"
@@ -152,6 +164,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_question = update.message.text.strip()
     question_clean = user_question.replace("💼 ", "").replace("💕 ", "").replace("🏃‍♂️ ", "").replace("🎯 ", "").replace("❓ ", "")
     user_data_store[user_id]['question'] = question_clean
+    logger.info(f"User {user_id} question: {question_clean}")
 
     keyboard = []
     for sign, info in ZODIAC_SIGNS.items():
@@ -177,9 +190,54 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zodiac_sign = query.data.replace('zodiac_', '')
         user_data_store[user_id]['zodiac'] = zodiac_sign
         update_user_zodiac(user_id, zodiac_sign)
+        logger.info(f"User {user_id} selected zodiac: {zodiac_sign}")
 
-        logger.info(f"Creating invoice for user {user_id}, zodiac: {zodiac_sign}")
+        # В тестовом режиме или для демонстрации пропускаем оплату
+        if config.TEST_MODE:
+            logger.info(f"TEST MODE: Skipping payment for user {user_id}")
+            
+            gender = user_data_store[user_id].get('gender', 'other')
+            if gender == 'male':
+                dear = "Дорогой"
+            elif gender == 'female':
+                dear = "Дорогая"
+            else:
+                dear = "Дорогой(ая)"
+
+            prediction = generate_prediction({
+                'name': user_data_store[user_id]['name'],
+                'gender': gender,
+                'question': user_data_store[user_id]['question'],
+                'zodiac': zodiac_sign
+            })
+            horoscope = generate_horoscope(zodiac_sign)
+
+            zodiac_emoji = ZODIAC_SIGNS[zodiac_sign]['emoji']
+            zodiac_name = ZODIAC_SIGNS[zodiac_sign]['name_ru']
+
+            result_text = (
+                f"✨ *ВАШЕ ПРЕДСКАЗАНИЕ* ✨\n\n"
+                f"{prediction}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{zodiac_emoji} *ГОРОСКОП ДЛЯ {zodiac_name.upper()}* {zodiac_emoji}\n\n"
+                f"{horoscope}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{dear} *{user_data_store[user_id]['name']}*, 💫 благодарю за доверие!\n"
+                f"🔮 Если хотите узнать больше, нажмите кнопку ниже."
+            )
+
+            keyboard = [[InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_to_menu")]]
+
+            await query.edit_message_text(
+                result_text,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+            del user_data_store[user_id]
+            return ConversationHandler.END
         
+        # Реальная оплата
         invoice = crypto_pay.create_invoice(0.10, "USDT", "Предсказание")
         if invoice:
             invoice_id = invoice['invoice_id']
@@ -218,7 +276,7 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 async def check_payment_background(user_id, invoice_id, context):
-    max_attempts = 60  # 5 минут
+    max_attempts = 60
     
     for attempt in range(max_attempts):
         await asyncio.sleep(5)
@@ -352,7 +410,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔮 *Как получить предсказание:*\n\n"
         "1️⃣ Нажмите кнопку «🔮 Получить предсказание»\n"
         "2️⃣ Укажите имя и пол\n"
-        "3️⃣ Расскажите, что вас волнует (или выберите вариант)\n"
+        "3️⃣ Расскажите, что вас волнует\n"
         "4️⃣ Выберите знак зодиака\n"
         "5️⃣ Оплатите 0.10 USDT через CryptoPay\n"
         "6️⃣ Ждите автоматической доставки предсказания!\n\n"
