@@ -35,48 +35,63 @@ except Exception as e:
 # Импортируем Telegram
 try:
     from telegram import Update
-    from telegram.ext import Application, CommandHandler, MessageHandler, filters
+    from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
     TELEGRAM_AVAILABLE = True
     logger.info("Telegram imported")
     
-    # Простые обработчики
-    async def start(update: Update, context):
+    # Обработчики команд
+    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /start"""
+        user = update.effective_user
         await update.message.reply_text(
-            "🌟 *Привет!* 🌟\n\n"
-            "Я бот-предсказатель 🔮\n\n"
-            "Я помогу тебе заглянуть в будущее и получить мудрый совет!\n\n"
-            "💰 Стоимость предсказания: 0.10 USDT\n\n"
-            "📝 *Чтобы начать, нажми:*\n"
-            "/predict - получить предсказание\n"
-            "/help - помощь",
+            f"🌟 *Привет, {user.first_name}!* 🌟\n\n"
+            f"Я бот-предсказатель 🔮\n\n"
+            f"Я помогу тебе заглянуть в будущее и получить мудрый совет!\n\n"
+            f"💰 Стоимость предсказания: 0.10 USDT\n\n"
+            f"📝 *Доступные команды:*\n"
+            f"/start - начать работу\n"
+            f"/predict - получить предсказание\n"
+            f"/help - помощь",
             parse_mode='Markdown'
         )
     
-    async def predict(update: Update, context):
+    async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /predict"""
         await update.message.reply_text(
-            "🔮 *Скоро здесь будет магия!*\n\n"
-            "Полная версия бота с предсказаниями и гороскопами уже готова!\n\n"
-            "Сейчас бот настраивается. Загляните позже ✨",
+            "🔮 *Скоро здесь будет магия!* 🔮\n\n"
+            "Бот готов к работе, но требует настройки.\n\n"
+            "Сейчас добавляются все функции предсказаний и гороскопов.\n\n"
+            "Загляните позже - уже скоро! ✨\n\n"
+            "А пока можете попробовать:\n"
+            "/start - приветствие\n"
+            "/help - справка",
             parse_mode='Markdown'
         )
     
-    async def help_command(update: Update, context):
+    async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /help"""
         await update.message.reply_text(
             "📚 *Помощь* 📚\n\n"
-            "🔹 /start - начать работу\n"
-            "🔹 /predict - получить предсказание\n"
+            "🔹 /start - начать работу с ботом\n"
+            "🔹 /predict - получить персональное предсказание\n"
             "🔹 /help - показать эту справку\n\n"
-            "✨ Бот работает на нейросетях и генерирует уникальные предсказания!",
+            "✨ *Особенности:*\n"
+            "• Предсказания генерируются нейросетью\n"
+            "• Гороскопы для всех знаков зодиака\n"
+            "• Оплата в USDT через CryptoPay\n\n"
+            "🚀 Полная версия скоро будет доступна!",
             parse_mode='Markdown'
         )
     
-    async def echo(update: Update, context):
+    async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик текстовых сообщений"""
         await update.message.reply_text(
-            "🤔 Я не понимаю эту команду.\n\n"
-            "Попробуйте:\n"
+            "🤔 *Я не понимаю эту команду*\n\n"
+            "Попробуйте использовать:\n"
             "/start - начать\n"
             "/predict - предсказание\n"
-            "/help - помощь"
+            "/help - помощь",
+            parse_mode='Markdown'
         )
         
 except Exception as e:
@@ -112,7 +127,7 @@ def setup_telegram():
         return False
     
     try:
-        logger.info(f"Setting up Telegram bot...")
+        logger.info("Setting up Telegram bot...")
         telegram_app = Application.builder().token(config.BOT_TOKEN).build()
         
         # Добавляем обработчики
@@ -128,7 +143,7 @@ def setup_telegram():
         return False
 
 def run_telegram():
-    """Запуск Telegram бота"""
+    """Запуск Telegram бота в polling режиме"""
     global telegram_app
     
     if not telegram_app:
@@ -139,6 +154,7 @@ def run_telegram():
         logger.info("Starting Telegram polling...")
         # Запускаем polling
         telegram_app.run_polling(drop_pending_updates=True)
+        logger.info("Telegram polling started successfully")
     except Exception as e:
         logger.error(f"Polling error: {e}")
 
@@ -160,7 +176,22 @@ def health():
         'timestamp': time.time()
     })
 
-if __name__ == '__main__':
+@flask_app.route('/status')
+def status():
+    """Детальный статус бота"""
+    return jsonify({
+        'bot_configured': telegram_app is not None,
+        'bot_token': bool(config.BOT_TOKEN),
+        'telegram_module': TELEGRAM_AVAILABLE,
+        'thread_running': bot_thread is not None and bot_thread.is_alive() if bot_thread else False
+    })
+
+# Важно: запускаем Telegram бота ПРИ ЗАПУСКЕ, а не только в if __name__
+# Это нужно для gunicorn
+def start_bot():
+    """Функция для запуска бота при импорте"""
+    global bot_thread
+    
     print("=" * 60)
     print(f"Python: {sys.version}")
     print(f"Telegram available: {TELEGRAM_AVAILABLE}")
@@ -182,14 +213,21 @@ if __name__ == '__main__':
             bot_thread.start()
             logger.info("Telegram bot thread started")
             print("✅ Telegram bot is running in background")
+            return True
         else:
             logger.error("Failed to setup Telegram bot")
             print("❌ Failed to setup Telegram bot")
+            return False
     else:
         logger.warning("Telegram bot not configured")
         print("⚠️ Telegram bot not configured - missing modules or token")
-    
-    # Запуск Flask
+        return False
+
+# Запускаем бота при загрузке модуля (для gunicorn)
+bot_started = start_bot()
+
+if __name__ == '__main__':
+    # Запуск Flask (если запускаем напрямую)
     port = int(os.environ.get('PORT', 5000))
     logger.info(f"Starting Flask server on port {port}")
     print(f"🚀 Flask server running on port {port}")
