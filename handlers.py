@@ -7,6 +7,7 @@ from payment import crypto_pay
 from zodiac import ZODIAC_SIGNS
 from utils import logger
 import asyncio
+import traceback
 
 # Состояния
 ASK_NAME, ASK_GENDER, ASK_QUESTION, ASK_ZODIAC = range(4)
@@ -31,7 +32,6 @@ def get_question_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
 def get_main_keyboard():
-    """Главная клавиатура — только кнопка предсказания (Помощь удалена)"""
     keyboard = [[KeyboardButton("🔮 Получить предсказание")]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -160,7 +160,11 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if invoice:
         invoice_id = invoice['invoice_id']
         user_data_store[user_id]['invoice_id'] = invoice_id
-        pending_payments[invoice_id] = {'user_id': user_id, 'status': 'pending'}
+        pending_payments[invoice_id] = {
+            'user_id': user_id, 
+            'status': 'pending',
+            'created_at': asyncio.get_event_loop().time()
+        }
 
         keyboard = [[InlineKeyboardButton(f"💳 Оплатить 0.10 USDT", url=invoice['pay_url'])]]
 
@@ -182,6 +186,7 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_keyboard()
         )
 
+        # Запускаем проверку в отдельной задаче
         asyncio.create_task(check_payment_background(user_id, invoice_id, context))
         return ConversationHandler.END
     else:
@@ -192,14 +197,30 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 async def check_payment_background(user_id, invoice_id, context):
-    for _ in range(60):
+    """Фоновая проверка оплаты с увеличенным временем ожидания"""
+    max_attempts = 120  # 10 минут (120 * 5 секунд)
+    
+    for attempt in range(max_attempts):
         await asyncio.sleep(5)
+        
+        # Проверяем, существует ли пользователь
         if user_id not in user_data_store:
+            logger.info(f"User {user_id} cancelled, stopping payment check")
             return
-
-        if crypto_pay.check_payment(invoice_id):
-            user_data = user_data_store.get(user_id)
-            if user_data and user_data.get('invoice_id') == invoice_id:
+        
+        user_data = user_data_store.get(user_id)
+        if not user_data or user_data.get('invoice_id') != invoice_id:
+            logger.info(f"Invoice {invoice_id} no longer pending for user {user_id}")
+            return
+        
+        try:
+            # Проверяем оплату
+            is_paid = crypto_pay.check_payment(invoice_id)
+            
+            if is_paid:
+                logger.info(f"Payment confirmed for user {user_id}, invoice {invoice_id}")
+                
+                # Получаем пол для обращения
                 gender = user_data.get('gender', 'other')
                 if gender == 'male':
                     dear = "Дорогой"
@@ -208,6 +229,7 @@ async def check_payment_background(user_id, invoice_id, context):
                 else:
                     dear = "Дорогой(ая)"
 
+                # Генерируем предсказания
                 prediction = generate_prediction({
                     'name': user_data['name'],
                     'gender': gender,
@@ -219,9 +241,15 @@ async def check_payment_background(user_id, invoice_id, context):
                 zodiac_emoji = ZODIAC_SIGNS[user_data['zodiac']]['emoji']
                 zodiac_name = ZODIAC_SIGNS[user_data['zodiac']]['name_ru']
 
-                save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
-                save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
+                # Сохраняем в БД
+                try:
+                    save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
+                    save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
+                    logger.info(f"Predictions saved for user {user_id}")
+                except Exception as e:
+                    logger.error(f"Error saving predictions: {e}")
 
+                # Формируем результат
                 result_text = (
                     f"✅ *ОПЛАТА ПОЛУЧЕНА!* ✅\n\n"
                     f"✨ *ВАШЕ ПРЕДСКАЗАНИЕ* ✨\n\n"
@@ -236,24 +264,50 @@ async def check_payment_background(user_id, invoice_id, context):
 
                 keyboard = [[InlineKeyboardButton("🔮 Новое предсказание", callback_data="new_prediction")]]
 
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=result_text,
-                    parse_mode='Markdown',
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
+                # Отправляем результат
+                try:
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=result_text,
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    logger.info(f"Prediction sent to user {user_id}")
+                except Exception as e:
+                    logger.error(f"Error sending prediction: {e}")
+                    # Пробуем отправить без кнопки
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=result_text,
+                        parse_mode='Markdown'
+                    )
 
-                del user_data_store[user_id]
-                del pending_payments[invoice_id]
+                # Очищаем данные
+                if user_id in user_data_store:
+                    del user_data_store[user_id]
+                if invoice_id in pending_payments:
+                    del pending_payments[invoice_id]
+                
                 return
-
+                
+        except Exception as e:
+            logger.error(f"Error checking payment for user {user_id}: {e}")
+            logger.error(traceback.format_exc())
+            continue
+    
     # Таймаут
-    await context.bot.send_message(
-        chat_id=user_id,
-        text="⏰ *Время ожидания оплаты истекло*\n\nПопробуйте заново, нажав /predict.",
-        parse_mode='Markdown',
-        reply_markup=get_main_keyboard()
-    )
+    logger.warning(f"Payment timeout for user {user_id}, invoice {invoice_id}")
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⏰ *Время ожидания оплаты истекло (10 минут)*\n\nПопробуйте заново, нажав /predict.",
+            parse_mode='Markdown',
+            reply_markup=get_main_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Error sending timeout message: {e}")
+    
+    # Очищаем данные
     if user_id in user_data_store:
         del user_data_store[user_id]
     if invoice_id in pending_payments:
