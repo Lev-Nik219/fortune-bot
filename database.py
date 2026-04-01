@@ -40,6 +40,19 @@ def init_db():
     except Exception as e:
         logger.error(f"Database error: {e}")
 
+def get_user(user_id):
+    """Получение информации о пользователе"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        return user
+    except Exception as e:
+        logger.error(f"Error getting user {user_id}: {e}")
+        return None
+
 def create_user(user_id, username, first_name, last_name):
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -50,6 +63,7 @@ def create_user(user_id, username, first_name, last_name):
         ''', (user_id, username, first_name, last_name, datetime.now()))
         conn.commit()
         conn.close()
+        logger.info(f"User {user_id} created")
     except Exception as e:
         logger.error(f"Create user error: {e}")
 
@@ -79,5 +93,6 @@ def save_prediction(user_id, pred_type, pred_text, zodiac_sign, price):
         
         conn.commit()
         conn.close()
+        logger.info(f"Prediction saved for user {user_id}")
     except Exception as e:
         logger.error(f"Save prediction error: {e}")

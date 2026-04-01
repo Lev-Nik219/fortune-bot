@@ -89,7 +89,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     create_user(user.id, user.username, user.first_name, user.last_name)
     logger.info(f"User {user.id} started")
 
-    # Показываем стартовое приветственное меню
     await update.message.reply_text(
         get_start_menu_text(user.first_name),
         parse_mode='Markdown',
@@ -197,7 +196,6 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-        # После создания инвойса показываем основное меню
         user_name = user_data_store[user_id].get('name', 'друг')
         await context.bot.send_message(
             chat_id=user_id,
@@ -216,27 +214,22 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 async def check_payment_background(user_id, invoice_id, context):
-    """Фоновая проверка оплаты"""
-    max_attempts = 120  # 10 минут
+    max_attempts = 120
     
     for attempt in range(max_attempts):
         await asyncio.sleep(5)
         
         if user_id not in user_data_store:
-            logger.info(f"User {user_id} cancelled, stopping payment check")
             return
         
         user_data = user_data_store.get(user_id)
         if not user_data or user_data.get('invoice_id') != invoice_id:
-            logger.info(f"Invoice {invoice_id} no longer pending for user {user_id}")
             return
         
         try:
             is_paid = crypto_pay.check_payment(invoice_id)
             
             if is_paid:
-                logger.info(f"Payment confirmed for user {user_id}, invoice {invoice_id}")
-                
                 gender = user_data.get('gender', 'other')
                 if gender == 'male':
                     dear = "Дорогой"
@@ -256,12 +249,8 @@ async def check_payment_background(user_id, invoice_id, context):
                 zodiac_emoji = ZODIAC_SIGNS[user_data['zodiac']]['emoji']
                 zodiac_name = ZODIAC_SIGNS[user_data['zodiac']]['name_ru']
 
-                try:
-                    save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
-                    save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
-                    logger.info(f"Predictions saved for user {user_id}")
-                except Exception as e:
-                    logger.error(f"Error saving predictions: {e}")
+                save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
+                save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
 
                 result_text = (
                     f"✅ *ОПЛАТА ПОЛУЧЕНА!* ✅\n\n"
@@ -277,35 +266,21 @@ async def check_payment_background(user_id, invoice_id, context):
 
                 keyboard = [[InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_to_menu")]]
 
-                try:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text=result_text,
-                        parse_mode='Markdown',
-                        reply_markup=InlineKeyboardMarkup(keyboard)
-                    )
-                    logger.info(f"Prediction sent to user {user_id}")
-                except Exception as e:
-                    logger.error(f"Error sending prediction: {e}")
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text=result_text,
-                        parse_mode='Markdown'
-                    )
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=result_text,
+                    parse_mode='Markdown',
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
 
-                if user_id in user_data_store:
-                    del user_data_store[user_id]
-                if invoice_id in pending_payments:
-                    del pending_payments[invoice_id]
-                
+                del user_data_store[user_id]
+                del pending_payments[invoice_id]
                 return
                 
         except Exception as e:
-            logger.error(f"Error checking payment for user {user_id}: {e}")
-            logger.error(traceback.format_exc())
+            logger.error(f"Error checking payment: {e}")
             continue
     
-    logger.warning(f"Payment timeout for user {user_id}, invoice {invoice_id}")
     try:
         await context.bot.send_message(
             chat_id=user_id,
@@ -313,8 +288,8 @@ async def check_payment_background(user_id, invoice_id, context):
             parse_mode='Markdown',
             reply_markup=get_main_menu_keyboard()
         )
-    except Exception as e:
-        logger.error(f"Error sending timeout message: {e}")
+    except Exception:
+        pass
     
     if user_id in user_data_store:
         del user_data_store[user_id]
@@ -322,19 +297,16 @@ async def check_payment_background(user_id, invoice_id, context):
         del pending_payments[invoice_id]
 
 async def back_to_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Кнопка возврата в главное меню"""
     query = update.callback_query
     await query.answer()
     
-    # Получаем имя пользователя из БД
     user_id = query.from_user.id
     user_info = get_user(user_id)
     if user_info:
-        user_name = user_info[2]  # first_name
+        user_name = user_info[2]
     else:
         user_name = query.from_user.first_name
     
-    # Отправляем красивое основное меню
     await context.bot.send_message(
         chat_id=query.from_user.id,
         text=get_main_menu_text(user_name),
@@ -350,7 +322,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del pending_payments[invoice_id]
         del user_data_store[user_id]
 
-    # Получаем имя пользователя из БД
     user_info = get_user(user_id)
     if user_info:
         user_name = user_info[2]
@@ -381,10 +352,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "4️⃣ Выберите знак зодиака\n"
         "5️⃣ Оплатите 0.10 USDT через CryptoPay\n"
         "6️⃣ Ждите автоматической доставки предсказания!\n\n"
-        "💰 *Оплата:*\n"
-        "• Валюта: USDT (сеть TRC20)\n"
-        "• Сумма: 0.10 USDT\n"
-        "• Предсказание придёт автоматически после подтверждения\n\n"
+        "💰 *Оплата:* USDT (сеть TRC20), сумма 0.10 USDT\n\n"
         "⚡ *Команды:*\n"
         "/start — начать работу\n"
         "/predict — получить предсказание\n"
