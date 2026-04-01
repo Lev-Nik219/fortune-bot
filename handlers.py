@@ -31,7 +31,7 @@ def get_question_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
 def get_main_keyboard():
-    """Главная клавиатура — только кнопка предсказания (Помощь убрана)"""
+    """Главная клавиатура — только кнопка предсказания (Помощь удалена)"""
     keyboard = [[KeyboardButton("🔮 Получить предсказание")]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -200,7 +200,6 @@ async def check_payment_background(user_id, invoice_id, context):
         if crypto_pay.check_payment(invoice_id):
             user_data = user_data_store.get(user_id)
             if user_data and user_data.get('invoice_id') == invoice_id:
-                # Получаем пол для обращения
                 gender = user_data.get('gender', 'other')
                 if gender == 'male':
                     dear = "Дорогой"
