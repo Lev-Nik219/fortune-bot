@@ -188,7 +188,7 @@ async def get_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ZODIAC
 
 async def get_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатываем выбор знака зодиака и создаем предсказание"""
+    """Обрабатываем выбор знака зодиака и создаем инвойс"""
     try:
         query = update.callback_query
         await query.answer()
@@ -201,9 +201,9 @@ async def get_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         user_data = user_data_store[user_id]
         
-        # В тестовом режиме показываем предсказание сразу
+        # В ТЕСТОВОМ РЕЖИМЕ - показываем предсказание без оплаты
         if config.TEST_MODE:
-            logger.info(f"TEST MODE: Generating prediction for user {user_id}")
+            logger.info(f"TEST MODE: Generating prediction for user {user_id} (no payment)")
             
             gender = user_data.get('gender', 'other')
             if gender == 'male':
@@ -213,7 +213,6 @@ async def get_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 dear = "Дорогой(ая)"
             
-            # Генерируем предсказание (минимум 3 предложения)
             prediction = generate_prediction({
                 'name': user_data['name'],
                 'gender': gender,
@@ -221,17 +220,14 @@ async def get_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'zodiac': zodiac
             })
             
-            # Генерируем гороскоп (минимум 3 предложения)
             horoscope = generate_horoscope(zodiac)
             
             zodiac_emoji = ZODIAC_SIGNS[zodiac]['emoji']
             zodiac_name = ZODIAC_SIGNS[zodiac]['name_ru']
             
-            # Сохраняем в БД
             save_prediction(user_id, 'prediction', prediction, zodiac, 0.10)
             save_prediction(user_id, 'horoscope', horoscope, zodiac, 0.10)
             
-            # Красивое оформление результата
             result_text = (
                 f"✨ *ВАШЕ ПРЕДСКАЗАНИЕ* ✨\n\n"
                 f"{prediction}\n\n"
@@ -254,8 +250,10 @@ async def get_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del user_data_store[user_id]
             return ConversationHandler.END
         
-        # Реальная оплата
+        # РЕАЛЬНАЯ ОПЛАТА
+        logger.info(f"Creating invoice for user {user_id}")
         invoice = crypto_pay.create_invoice(0.10, "USDT", "Предсказание")
+        
         if invoice:
             invoice_id = invoice['invoice_id']
             user_data_store[user_id]['invoice_id'] = invoice_id
@@ -311,7 +309,7 @@ async def check_payment_background(user_id, invoice_id, context):
             is_paid = crypto_pay.check_payment(invoice_id)
             
             if is_paid:
-                logger.info(f"Payment confirmed for user {user_id}")
+                logger.info(f"✅ Payment confirmed for user {user_id}")
                 
                 gender = user_data.get('gender', 'other')
                 if gender == 'male':
@@ -321,7 +319,6 @@ async def check_payment_background(user_id, invoice_id, context):
                 else:
                     dear = "Дорогой(ая)"
                 
-                # Генерируем предсказание
                 prediction = generate_prediction({
                     'name': user_data['name'],
                     'gender': gender,
@@ -329,17 +326,14 @@ async def check_payment_background(user_id, invoice_id, context):
                     'zodiac': user_data['zodiac']
                 })
                 
-                # Генерируем гороскоп
                 horoscope = generate_horoscope(user_data['zodiac'])
                 
                 zodiac_emoji = ZODIAC_SIGNS[user_data['zodiac']]['emoji']
                 zodiac_name = ZODIAC_SIGNS[user_data['zodiac']]['name_ru']
                 
-                # Сохраняем в БД
                 save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
                 save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
                 
-                # Формируем результат
                 result_text = (
                     f"✅ *ОПЛАТА ПОЛУЧЕНА!* ✅\n\n"
                     f"✨ *ВАШЕ ПРЕДСКАЗАНИЕ* ✨\n\n"
@@ -370,6 +364,7 @@ async def check_payment_background(user_id, invoice_id, context):
             continue
     
     # Таймаут
+    logger.warning(f"Payment timeout for user {user_id}")
     try:
         await context.bot.send_message(
             chat_id=user_id,
