@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 import config
-from database import *
+from database import init_db, create_user, update_user_zodiac, save_prediction, get_user
 from predictions import generate_prediction, generate_horoscope
 from payment import crypto_pay
 from zodiac import ZODIAC_SIGNS
@@ -31,10 +31,33 @@ def get_question_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
-def get_main_keyboard():
-    """Главная клавиатура — только кнопка предсказания"""
+def get_main_menu_keyboard():
+    """Основное меню — только кнопка предсказания"""
     keyboard = [[KeyboardButton("🔮 Получить предсказание")]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def get_start_menu_text(user_name):
+    """Стартовое приветственное меню"""
+    return (
+        f"✨ *Добро пожаловать, {user_name}!* ✨\n\n"
+        f"🌟 Я — *Бот-предсказатель* 🌟\n"
+        f"🔮 Ваш личный проводник в мир тайн и вдохновения.\n\n"
+        f"💎 *Что вы получите всего за 0.10 USDT?*\n"
+        f"• 🎯 *Персональное предсказание* – ответ на ваш вопрос\n"
+        f"• 🌙 *Юмористический гороскоп* – шутливый взгляд на день\n"
+        f"• 💫 *Заряд позитива* – энергия на весь день\n\n"
+        f"👇 *Нажмите кнопку, чтобы начать* 👇"
+    )
+
+def get_main_menu_text(user_name):
+    """Основное меню для возврата"""
+    return (
+        f"🔙 *Главное меню*\n\n"
+        f"✨ *{user_name}*, вы вернулись в главное меню.\n\n"
+        f"🌟 Я — *Бот-предсказатель* 🌟\n"
+        f"🔮 Я здесь, чтобы помочь вам заглянуть в будущее.\n\n"
+        f"💎 *Нажмите кнопку, чтобы получить новое предсказание* 👇"
+    )
 
 def register_handlers(application):
     conv_handler = ConversationHandler(
@@ -62,21 +85,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     create_user(user.id, user.username, user.first_name, user.last_name)
     logger.info(f"User {user.id} started")
 
-    welcome_text = (
-        f"✨ *Добро пожаловать, {user.first_name}!* ✨\n\n"
-        f"🌟 Я — *Бот-предсказатель* 🌟\n"
-        f"🔮 Ваш личный проводник в мир тайн и вдохновения.\n\n"
-        f"💎 *Что вы получите всего за 0.10 USDT?*\n"
-        f"• 🎯 *Персональное предсказание* – ответ на ваш вопрос\n"
-        f"• 🌙 *Юмористический гороскоп* – шутливый взгляд на день\n"
-        f"• 💫 *Заряд позитива* – энергия на весь день\n\n"
-        f"👇 *Нажмите кнопку, чтобы начать* 👇"
-    )
-
+    # Показываем стартовое приветственное меню
     await update.message.reply_text(
-        welcome_text,
+        get_start_menu_text(user.first_name),
         parse_mode='Markdown',
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_menu_keyboard()
     )
 
 async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -180,11 +193,13 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
+        # После создания инвойса показываем основное меню
+        user_name = user_data_store[user_id].get('name', 'друг')
         await context.bot.send_message(
             chat_id=user_id,
-            text="🔙 *Главное меню*",
+            text=get_main_menu_text(user_name),
             parse_mode='Markdown',
-            reply_markup=get_main_keyboard()
+            reply_markup=get_main_menu_keyboard()
         )
 
         asyncio.create_task(check_payment_background(user_id, invoice_id, context))
@@ -292,7 +307,7 @@ async def check_payment_background(user_id, invoice_id, context):
             chat_id=user_id,
             text="⏰ *Время ожидания оплаты истекло (10 минут)*\n\nПопробуйте заново, нажав /predict.",
             parse_mode='Markdown',
-            reply_markup=get_main_keyboard()
+            reply_markup=get_main_menu_keyboard()
         )
     except Exception as e:
         logger.error(f"Error sending timeout message: {e}")
@@ -303,18 +318,25 @@ async def check_payment_background(user_id, invoice_id, context):
         del pending_payments[invoice_id]
 
 async def back_to_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Кнопка возврата в главное меню (сообщение с предсказанием не удаляется)"""
+    """Кнопка возврата в главное меню"""
     query = update.callback_query
     await query.answer()
     
-    # НЕ удаляем сообщение с предсказанием
-    # Просто отправляем новое сообщение с главным меню
+    # Получаем имя пользователя из БД
+    user_id = query.from_user.id
+    user_info = get_user(user_id)
+    if user_info:
+        # user_info структура: (user_id, username, first_name, last_name, ...)
+        user_name = user_info[2]  # first_name
+    else:
+        user_name = query.from_user.first_name
     
+    # Отправляем основное меню
     await context.bot.send_message(
         chat_id=query.from_user.id,
-        text="🔙 *Главное меню*\n\nНажмите кнопку, чтобы получить новое предсказание.",
+        text=get_main_menu_text(user_name),
         parse_mode='Markdown',
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_menu_keyboard()
     )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -325,14 +347,28 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del pending_payments[invoice_id]
         del user_data_store[user_id]
 
+    # Получаем имя пользователя из БД
+    user_info = get_user(user_id)
+    if user_info:
+        user_name = user_info[2]
+    else:
+        user_name = update.effective_user.first_name
+
     await update.message.reply_text(
-        "❌ *Операция отменена*\n\nВы можете начать заново через главное меню.",
+        f"❌ *Операция отменена*\n\n{get_main_menu_text(user_name)}",
         parse_mode='Markdown',
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_menu_keyboard()
     )
     return ConversationHandler.END
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_info = get_user(user_id)
+    if user_info:
+        user_name = user_info[2]
+    else:
+        user_name = update.effective_user.first_name
+    
     help_text = (
         "📚 *ПОМОЩЬ ПО БОТУ* 📚\n\n"
         "🔮 *Как получить предсказание:*\n\n"
@@ -356,5 +392,5 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         help_text,
         parse_mode='Markdown',
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_menu_keyboard()
     )
