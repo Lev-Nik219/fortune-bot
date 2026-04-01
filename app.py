@@ -48,7 +48,6 @@ flask_app = Flask(__name__)
 telegram_app = None
 bot_thread = None
 bot_running = False
-stop_bot = False
 
 def setup_telegram():
     """Настройка Telegram бота"""
@@ -78,7 +77,7 @@ def setup_telegram():
 
 async def run_telegram_async():
     """Асинхронный запуск Telegram бота"""
-    global telegram_app, bot_running, stop_bot
+    global telegram_app, bot_running
     
     if not telegram_app:
         logger.error("Telegram app not initialized")
@@ -88,29 +87,26 @@ async def run_telegram_async():
         logger.info("Starting Telegram polling...")
         bot_running = True
         
-        # Останавливаем предыдущие обновления
-        await telegram_app.updater.stop()
-        await asyncio.sleep(1)
-        
-        # Запускаем polling с обработкой конфликтов
+        # Простой запуск polling без сложной инициализации
         await telegram_app.initialize()
         await telegram_app.start()
         
-        # Используем drop_pending_updates=True чтобы избежать конфликтов
+        # Запускаем polling
         await telegram_app.updater.start_polling(drop_pending_updates=True)
         
         logger.info("Telegram polling started successfully")
         
         # Держим бота запущенным
-        while bot_running and not stop_bot:
+        while bot_running:
             await asyncio.sleep(1)
             
     except Exception as e:
         logger.error(f"Polling error: {e}")
         bot_running = False
     finally:
-        if telegram_app:
+        if telegram_app and telegram_app.updater.running:
             try:
+                await telegram_app.updater.stop()
                 await telegram_app.stop()
                 await telegram_app.shutdown()
             except Exception as e:
@@ -179,7 +175,7 @@ def start_bot():
             bot_thread.start()
             logger.info("Telegram bot thread started")
             print("✅ Telegram bot is running in background")
-            time.sleep(3)  # Даем время на запуск
+            time.sleep(2)
             return True
         else:
             logger.error("Failed to setup Telegram bot")
@@ -191,7 +187,7 @@ def start_bot():
         return False
 
 # Запускаем бота
-bot_started = start_bot()
+start_bot()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
