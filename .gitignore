@@ -1,56 +1,11 @@
-# Создаем правильный .gitignore
-@"
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv/
+﻿__pycache__/
+*.pyc
 .env
-.env.local
-.env.*.local
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Database
+venv/
+.venv/
 *.db
 *.sqlite
-*.sqlite3
-
-# Logs
 *.log
-logs/
-
-# Local development
-local_settings.py
-
-# Render
-.render/
-"@ | Out-File -FilePath .gitignore -Encoding UTF8
+.DS_Store
+.vscode/
+.idea/
