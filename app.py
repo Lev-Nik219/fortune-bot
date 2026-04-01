@@ -34,7 +34,7 @@ except Exception as e:
 
 # Импортируем обработчики
 try:
-    from handlers import *
+    from handlers import register_handlers
     TELEGRAM_AVAILABLE = True
     logger.info("Handlers imported successfully")
 except Exception as e:
@@ -87,11 +87,9 @@ async def run_telegram_async():
         logger.info("Starting Telegram polling...")
         bot_running = True
         
-        # Простой запуск polling без сложной инициализации
+        # Запускаем polling
         await telegram_app.initialize()
         await telegram_app.start()
-        
-        # Запускаем polling
         await telegram_app.updater.start_polling(drop_pending_updates=True)
         
         logger.info("Telegram polling started successfully")
@@ -104,7 +102,7 @@ async def run_telegram_async():
         logger.error(f"Polling error: {e}")
         bot_running = False
     finally:
-        if telegram_app and telegram_app.updater.running:
+        if telegram_app:
             try:
                 await telegram_app.updater.stop()
                 await telegram_app.stop()
@@ -175,7 +173,7 @@ def start_bot():
             bot_thread.start()
             logger.info("Telegram bot thread started")
             print("✅ Telegram bot is running in background")
-            time.sleep(2)
+            time.sleep(3)
             return True
         else:
             logger.error("Failed to setup Telegram bot")
