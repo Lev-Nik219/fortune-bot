@@ -256,7 +256,6 @@ async def check_payment_background(user_id, invoice_id, context):
                     f"🔮 Если хотите узнать больше, нажмите кнопку ниже."
                 )
 
-                # Кнопка "Вернуться в меню" вместо "Новое предсказание"
                 keyboard = [[InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_to_menu")]]
 
                 try:
@@ -304,16 +303,16 @@ async def check_payment_background(user_id, invoice_id, context):
         del pending_payments[invoice_id]
 
 async def back_to_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Кнопка возврата в главное меню"""
+    """Кнопка возврата в главное меню (сообщение с предсказанием не удаляется)"""
     query = update.callback_query
     await query.answer()
     
-    # Отправляем сообщение с главным меню
-    await query.message.delete()
+    # НЕ удаляем сообщение с предсказанием
+    # Просто отправляем новое сообщение с главным меню
     
     await context.bot.send_message(
         chat_id=query.from_user.id,
-        text="🔙 *Вы вернулись в главное меню*\n\nНажмите кнопку, чтобы получить новое предсказание.",
+        text="🔙 *Главное меню*\n\nНажмите кнопку, чтобы получить новое предсказание.",
         parse_mode='Markdown',
         reply_markup=get_main_keyboard()
     )
