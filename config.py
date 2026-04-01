@@ -1,10 +1,16 @@
 import os
 from dotenv import load_dotenv
 
+# Загружаем переменные окружения
 load_dotenv()
 
+# Telegram Bot Token
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+
+# CryptoPay Token
 CRYPTOPAY_TOKEN = os.getenv("CRYPTOPAY_TOKEN", "")
+
+# Hugging Face API
 HF_API_KEY = os.getenv("HF_API_KEY", "")
 
 # Стоимость предсказания в USDT
@@ -17,7 +23,7 @@ TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 USE_WEBHOOK = os.getenv("USE_WEBHOOK", "false").lower() == "true"
 DATABASE_PATH = os.getenv("DATABASE_PATH", "bot_database.db")
 
-# URL для вебхука (на Render)
+# URL для вебхука
 RENDER_URL = os.getenv("RENDER_URL", "")
 WEBHOOK_URL = f"{RENDER_URL}/webhook" if RENDER_URL else None
 

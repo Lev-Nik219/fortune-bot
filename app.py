@@ -43,7 +43,8 @@ def run_telegram_polling():
     """Запуск Telegram бота в режиме polling"""
     try:
         logger.info("Starting Telegram bot in polling mode...")
-        telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
+        # Используем run_polling без параметра allowed_updates для совместимости
+        telegram_app.run_polling()
     except Exception as e:
         logger.error(f"Error in telegram polling: {e}")
 
@@ -58,7 +59,7 @@ def index():
 
 @flask_app.route('/health')
 def health():
-    """Эндпоинт для проверки здоровья (для UptimeRobot/Cron)"""
+    """Эндпоинт для проверки здоровья"""
     return jsonify({
         'status': 'healthy',
         'bot_running': True,
@@ -67,7 +68,7 @@ def health():
 
 @flask_app.route('/webhook', methods=['POST'])
 def webhook():
-    """Webhook для Telegram (если потребуется)"""
+    """Webhook для Telegram"""
     try:
         update = Update.de_json(request.get_json(force=True), telegram_app.bot)
         telegram_app.update_queue.put(update)
@@ -75,10 +76,6 @@ def webhook():
     except Exception as e:
         logger.error(f"Webhook error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
-def keep_alive():
-    """Функция для поддержания активности (будет вызвана каждый запрос)"""
-    pass
 
 if __name__ == '__main__':
     # Инициализация базы данных
