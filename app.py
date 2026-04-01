@@ -32,70 +32,13 @@ except Exception as e:
         TEST_MODE = False
         PRICE_USDT = 0.10
 
-# Импортируем Telegram
+# Импортируем обработчики
 try:
-    from telegram import Update
-    from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+    from handlers import *
     TELEGRAM_AVAILABLE = True
-    logger.info("Telegram imported")
-    
-    # Обработчики команд
-    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик команды /start"""
-        user = update.effective_user
-        await update.message.reply_text(
-            f"🌟 *Привет, {user.first_name}!* 🌟\n\n"
-            f"Я бот-предсказатель 🔮\n\n"
-            f"Я помогу тебе заглянуть в будущее и получить мудрый совет!\n\n"
-            f"💰 Стоимость предсказания: 0.10 USDT\n\n"
-            f"📝 *Доступные команды:*\n"
-            f"/start - начать работу\n"
-            f"/predict - получить предсказание\n"
-            f"/help - помощь",
-            parse_mode='Markdown'
-        )
-    
-    async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик команды /predict"""
-        await update.message.reply_text(
-            "🔮 *Скоро здесь будет магия!* 🔮\n\n"
-            "Бот готов к работе, но требует настройки.\n\n"
-            "Сейчас добавляются все функции предсказаний и гороскопов.\n\n"
-            "Загляните позже - уже скоро! ✨\n\n"
-            "А пока можете попробовать:\n"
-            "/start - приветствие\n"
-            "/help - справка",
-            parse_mode='Markdown'
-        )
-    
-    async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик команды /help"""
-        await update.message.reply_text(
-            "📚 *Помощь* 📚\n\n"
-            "🔹 /start - начать работу с ботом\n"
-            "🔹 /predict - получить персональное предсказание\n"
-            "🔹 /help - показать эту справку\n\n"
-            "✨ *Особенности:*\n"
-            "• Предсказания генерируются нейросетью\n"
-            "• Гороскопы для всех знаков зодиака\n"
-            "• Оплата в USDT через CryptoPay\n\n"
-            "🚀 Полная версия скоро будет доступна!",
-            parse_mode='Markdown'
-        )
-    
-    async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработчик текстовых сообщений"""
-        await update.message.reply_text(
-            "🤔 *Я не понимаю эту команду*\n\n"
-            "Попробуйте использовать:\n"
-            "/start - начать\n"
-            "/predict - предсказание\n"
-            "/help - помощь",
-            parse_mode='Markdown'
-        )
-        
+    logger.info("Handlers imported successfully")
 except Exception as e:
-    logger.error(f"Telegram import error: {e}")
+    logger.error(f"Handlers import error: {e}")
     TELEGRAM_AVAILABLE = False
 
 # Создаем Flask приложение
@@ -119,14 +62,12 @@ def setup_telegram():
         return False
     
     try:
+        from telegram.ext import Application
         logger.info("Setting up Telegram bot...")
         telegram_app = Application.builder().token(config.BOT_TOKEN).build()
         
-        # Добавляем обработчики
-        telegram_app.add_handler(CommandHandler('start', start))
-        telegram_app.add_handler(CommandHandler('predict', predict))
-        telegram_app.add_handler(CommandHandler('help', help_command))
-        telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+        # Регистрируем все обработчики из handlers.py
+        register_handlers(telegram_app)
         
         logger.info("Telegram bot configured successfully")
         return True
@@ -145,12 +86,10 @@ async def run_telegram_async():
     try:
         logger.info("Starting Telegram polling...")
         bot_running = True
-        # Запускаем polling с обработкой ошибок
         await telegram_app.initialize()
         await telegram_app.start()
         await telegram_app.updater.start_polling(drop_pending_updates=True)
         
-        # Держим бота запущенным
         while bot_running:
             await asyncio.sleep(1)
             
@@ -163,7 +102,7 @@ async def run_telegram_async():
             await telegram_app.shutdown()
 
 def run_telegram_thread():
-    """Запуск Telegram бота в отдельном потоке с event loop"""
+    """Запуск Telegram бота в отдельном потоке"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -193,7 +132,6 @@ def health():
 
 @flask_app.route('/status')
 def status():
-    """Детальный статус бота"""
     return jsonify({
         'bot_configured': telegram_app is not None,
         'bot_token': bool(config.BOT_TOKEN),
@@ -203,7 +141,7 @@ def status():
     })
 
 def start_bot():
-    """Функция для запуска бота при импорте"""
+    """Запуск бота"""
     global bot_thread, bot_running
     
     print("=" * 60)
@@ -222,13 +160,10 @@ def start_bot():
     # Настройка и запуск Telegram
     if TELEGRAM_AVAILABLE and config.BOT_TOKEN:
         if setup_telegram():
-            # Запускаем Telegram бота в отдельном потоке с правильным event loop
             bot_thread = threading.Thread(target=run_telegram_thread, daemon=True)
             bot_thread.start()
             logger.info("Telegram bot thread started")
             print("✅ Telegram bot is running in background")
-            
-            # Ждем немного, чтобы убедиться, что бот запустился
             time.sleep(2)
             return True
         else:
@@ -237,18 +172,13 @@ def start_bot():
             return False
     else:
         logger.warning("Telegram bot not configured")
-        print("⚠️ Telegram bot not configured - missing modules or token")
+        print("⚠️ Telegram bot not configured")
         return False
 
-# Запускаем бота при загрузке модуля
+# Запускаем бота
 bot_started = start_bot()
 
 if __name__ == '__main__':
-    # Запуск Flask
     port = int(os.environ.get('PORT', 5000))
     logger.info(f"Starting Flask server on port {port}")
-    print(f"🚀 Flask server running on port {port}")
-    print(f"🌐 Health check: https://fortune-bot-3j1x.onrender.com/health")
-    print("=" * 60)
-    
     flask_app.run(host='0.0.0.0', port=port)

@@ -2,13 +2,10 @@ import logging
 import sys
 
 def setup_logging():
-    """Настройка логирования"""
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         level=logging.INFO,
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
+        handlers=[logging.StreamHandler(sys.stdout)]
     )
     return logging.getLogger(__name__)
 

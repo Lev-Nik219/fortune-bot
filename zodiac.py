@@ -1,4 +1,3 @@
-# Знаки зодиака и их даты
 ZODIAC_SIGNS = {
     'овен': {'dates': '21 марта - 19 апреля', 'emoji': '♈️', 'name_ru': 'Овен'},
     'телец': {'dates': '20 апреля - 20 мая', 'emoji': '♉️', 'name_ru': 'Телец'},
@@ -13,16 +12,3 @@ ZODIAC_SIGNS = {
     'водолей': {'dates': '20 января - 18 февраля', 'emoji': '♒️', 'name_ru': 'Водолей'},
     'рыбы': {'dates': '19 февраля - 20 марта', 'emoji': '♓️', 'name_ru': 'Рыбы'}
 }
-
-def get_zodiac_signs_keyboard():
-    """Создание клавиатуры с знаками зодиака"""
-    keyboard = []
-    row = []
-    for i, sign in enumerate(ZODIAC_SIGNS.keys(), 1):
-        row.append(sign.capitalize())
-        if i % 3 == 0:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
-    return keyboard
