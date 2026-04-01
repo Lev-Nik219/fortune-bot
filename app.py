@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import threading
+import asyncio
 import logging
 from flask import Flask, jsonify
 
@@ -24,7 +25,6 @@ try:
     logger.info("Config and database imported")
 except Exception as e:
     logger.error(f"Import error: {e}")
-    # Создаем заглушку
     class config:
         BOT_TOKEN = os.getenv('BOT_TOKEN', '')
         CRYPTOPAY_TOKEN = os.getenv('CRYPTOPAY_TOKEN', '')
@@ -97,15 +97,6 @@ try:
 except Exception as e:
     logger.error(f"Telegram import error: {e}")
     TELEGRAM_AVAILABLE = False
-    
-    async def start(update, context):
-        pass
-    async def predict(update, context):
-        pass
-    async def help_command(update, context):
-        pass
-    async def echo(update, context):
-        pass
 
 # Создаем Flask приложение
 flask_app = Flask(__name__)
@@ -113,6 +104,7 @@ flask_app = Flask(__name__)
 # Создаем Telegram приложение
 telegram_app = None
 bot_thread = None
+bot_running = False
 
 def setup_telegram():
     """Настройка Telegram бота"""
@@ -142,9 +134,9 @@ def setup_telegram():
         logger.error(f"Setup error: {e}")
         return False
 
-def run_telegram():
-    """Запуск Telegram бота в polling режиме"""
-    global telegram_app
+async def run_telegram_async():
+    """Асинхронный запуск Telegram бота"""
+    global telegram_app, bot_running
     
     if not telegram_app:
         logger.error("Telegram app not initialized")
@@ -152,11 +144,34 @@ def run_telegram():
     
     try:
         logger.info("Starting Telegram polling...")
-        # Запускаем polling
-        telegram_app.run_polling(drop_pending_updates=True)
-        logger.info("Telegram polling started successfully")
+        bot_running = True
+        # Запускаем polling с обработкой ошибок
+        await telegram_app.initialize()
+        await telegram_app.start()
+        await telegram_app.updater.start_polling(drop_pending_updates=True)
+        
+        # Держим бота запущенным
+        while bot_running:
+            await asyncio.sleep(1)
+            
     except Exception as e:
         logger.error(f"Polling error: {e}")
+        bot_running = False
+    finally:
+        if telegram_app:
+            await telegram_app.stop()
+            await telegram_app.shutdown()
+
+def run_telegram_thread():
+    """Запуск Telegram бота в отдельном потоке с event loop"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run_telegram_async())
+    except Exception as e:
+        logger.error(f"Thread error: {e}")
+    finally:
+        loop.close()
 
 @flask_app.route('/')
 def index():
@@ -166,7 +181,7 @@ def index():
         'python_version': sys.version,
         'telegram_available': TELEGRAM_AVAILABLE,
         'bot_token_set': bool(config.BOT_TOKEN),
-        'bot_running': telegram_app is not None
+        'bot_running': bot_running
     })
 
 @flask_app.route('/health')
@@ -183,14 +198,13 @@ def status():
         'bot_configured': telegram_app is not None,
         'bot_token': bool(config.BOT_TOKEN),
         'telegram_module': TELEGRAM_AVAILABLE,
-        'thread_running': bot_thread is not None and bot_thread.is_alive() if bot_thread else False
+        'thread_running': bot_running,
+        'bot_thread_alive': bot_thread is not None and bot_thread.is_alive() if bot_thread else False
     })
 
-# Важно: запускаем Telegram бота ПРИ ЗАПУСКЕ, а не только в if __name__
-# Это нужно для gunicorn
 def start_bot():
     """Функция для запуска бота при импорте"""
-    global bot_thread
+    global bot_thread, bot_running
     
     print("=" * 60)
     print(f"Python: {sys.version}")
@@ -208,11 +222,14 @@ def start_bot():
     # Настройка и запуск Telegram
     if TELEGRAM_AVAILABLE and config.BOT_TOKEN:
         if setup_telegram():
-            # Запускаем Telegram бота в отдельном потоке
-            bot_thread = threading.Thread(target=run_telegram, daemon=True)
+            # Запускаем Telegram бота в отдельном потоке с правильным event loop
+            bot_thread = threading.Thread(target=run_telegram_thread, daemon=True)
             bot_thread.start()
             logger.info("Telegram bot thread started")
             print("✅ Telegram bot is running in background")
+            
+            # Ждем немного, чтобы убедиться, что бот запустился
+            time.sleep(2)
             return True
         else:
             logger.error("Failed to setup Telegram bot")
@@ -223,11 +240,11 @@ def start_bot():
         print("⚠️ Telegram bot not configured - missing modules or token")
         return False
 
-# Запускаем бота при загрузке модуля (для gunicorn)
+# Запускаем бота при загрузке модуля
 bot_started = start_bot()
 
 if __name__ == '__main__':
-    # Запуск Flask (если запускаем напрямую)
+    # Запуск Flask
     port = int(os.environ.get('PORT', 5000))
     logger.info(f"Starting Flask server on port {port}")
     print(f"🚀 Flask server running on port {port}")
