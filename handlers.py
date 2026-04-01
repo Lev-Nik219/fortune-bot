@@ -32,6 +32,7 @@ def get_question_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
 def get_main_keyboard():
+    """Главная клавиатура — только кнопка предсказания"""
     keyboard = [[KeyboardButton("🔮 Получить предсказание")]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -53,6 +54,7 @@ def register_handlers(application):
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(conv_handler)
+    application.add_handler(CallbackQueryHandler(back_to_menu_callback, pattern='^back_to_menu$'))
     application.add_handler(MessageHandler(filters.Regex('^🔮 Получить предсказание$'), predict))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -195,7 +197,7 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 async def check_payment_background(user_id, invoice_id, context):
-    """Фоновая проверка оплаты (без кнопки нового предсказания)"""
+    """Фоновая проверка оплаты"""
     max_attempts = 120  # 10 минут
     
     for attempt in range(max_attempts):
@@ -251,15 +253,18 @@ async def check_payment_background(user_id, invoice_id, context):
                     f"{horoscope}\n\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                     f"{dear} *{user_data['name']}*, 💫 благодарю за доверие!\n"
-                    f"🔮 Чтобы получить новое предсказание, используйте кнопку «🔮 Получить предсказание» в главном меню."
+                    f"🔮 Если хотите узнать больше, нажмите кнопку ниже."
                 )
+
+                # Кнопка "Вернуться в меню" вместо "Новое предсказание"
+                keyboard = [[InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_to_menu")]]
 
                 try:
                     await context.bot.send_message(
                         chat_id=user_id,
                         text=result_text,
                         parse_mode='Markdown',
-                        reply_markup=get_main_keyboard()
+                        reply_markup=InlineKeyboardMarkup(keyboard)
                     )
                     logger.info(f"Prediction sent to user {user_id}")
                 except Exception as e:
@@ -297,6 +302,21 @@ async def check_payment_background(user_id, invoice_id, context):
         del user_data_store[user_id]
     if invoice_id in pending_payments:
         del pending_payments[invoice_id]
+
+async def back_to_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка возврата в главное меню"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Отправляем сообщение с главным меню
+    await query.message.delete()
+    
+    await context.bot.send_message(
+        chat_id=query.from_user.id,
+        text="🔙 *Вы вернулись в главное меню*\n\nНажмите кнопку, чтобы получить новое предсказание.",
+        parse_mode='Markdown',
+        reply_markup=get_main_keyboard()
+    )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
