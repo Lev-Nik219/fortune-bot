@@ -50,7 +50,7 @@ def get_start_menu_text(user_name):
     )
 
 def get_main_menu_text(user_name):
-    """Основное меню для возврата (такое же красивое, как стартовое)"""
+    """Основное меню для возврата"""
     return (
         f"🔙 *Главное меню*\n\n"
         f"✨ *Добро пожаловать обратно, {user_name}!* ✨\n\n"
@@ -185,25 +185,20 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [[InlineKeyboardButton(f"💳 Оплатить 0.10 USDT", url=invoice['pay_url'])]]
 
+        # Только сообщение об оплате, без основного меню!
         await query.edit_message_text(
             f"🌟 *Готово!* 🌟\n\n"
             f"💰 *Сумма к оплате:* 0.10 USDT\n"
             f"🪙 *Валюта:* USDT (TRC20)\n\n"
             f"🔽 *Нажмите на кнопку для оплаты* 🔽\n\n"
             f"⏳ *После подтверждения оплаты предсказание придёт автоматически.*\n"
-            f"Это займёт 1–2 минуты.",
+            f"Это займёт 1–2 минуты.\n\n"
+            f"💫 *Спасибо, что выбираете нас!*",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-        user_name = user_data_store[user_id].get('name', 'друг')
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=get_main_menu_text(user_name),
-            parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard()
-        )
-
+        # Запускаем фоновую проверку оплаты
         asyncio.create_task(check_payment_background(user_id, invoice_id, context))
         return ConversationHandler.END
     else:
@@ -214,22 +209,27 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 async def check_payment_background(user_id, invoice_id, context):
-    max_attempts = 120
+    """Фоновая проверка оплаты"""
+    max_attempts = 120  # 10 минут
     
     for attempt in range(max_attempts):
         await asyncio.sleep(5)
         
         if user_id not in user_data_store:
+            logger.info(f"User {user_id} cancelled, stopping payment check")
             return
         
         user_data = user_data_store.get(user_id)
         if not user_data or user_data.get('invoice_id') != invoice_id:
+            logger.info(f"Invoice {invoice_id} no longer pending for user {user_id}")
             return
         
         try:
             is_paid = crypto_pay.check_payment(invoice_id)
             
             if is_paid:
+                logger.info(f"Payment confirmed for user {user_id}, invoice {invoice_id}")
+                
                 gender = user_data.get('gender', 'other')
                 if gender == 'male':
                     dear = "Дорогой"
@@ -249,8 +249,12 @@ async def check_payment_background(user_id, invoice_id, context):
                 zodiac_emoji = ZODIAC_SIGNS[user_data['zodiac']]['emoji']
                 zodiac_name = ZODIAC_SIGNS[user_data['zodiac']]['name_ru']
 
-                save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
-                save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
+                try:
+                    save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
+                    save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
+                    logger.info(f"Predictions saved for user {user_id}")
+                except Exception as e:
+                    logger.error(f"Error saving predictions: {e}")
 
                 result_text = (
                     f"✅ *ОПЛАТА ПОЛУЧЕНА!* ✅\n\n"
@@ -266,21 +270,35 @@ async def check_payment_background(user_id, invoice_id, context):
 
                 keyboard = [[InlineKeyboardButton("🔙 Вернуться в меню", callback_data="back_to_menu")]]
 
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=result_text,
-                    parse_mode='Markdown',
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
+                try:
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=result_text,
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    logger.info(f"Prediction sent to user {user_id}")
+                except Exception as e:
+                    logger.error(f"Error sending prediction: {e}")
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=result_text,
+                        parse_mode='Markdown'
+                    )
 
-                del user_data_store[user_id]
-                del pending_payments[invoice_id]
+                if user_id in user_data_store:
+                    del user_data_store[user_id]
+                if invoice_id in pending_payments:
+                    del pending_payments[invoice_id]
+                
                 return
                 
         except Exception as e:
-            logger.error(f"Error checking payment: {e}")
+            logger.error(f"Error checking payment for user {user_id}: {e}")
+            logger.error(traceback.format_exc())
             continue
     
+    logger.warning(f"Payment timeout for user {user_id}, invoice {invoice_id}")
     try:
         await context.bot.send_message(
             chat_id=user_id,
@@ -288,8 +306,8 @@ async def check_payment_background(user_id, invoice_id, context):
             parse_mode='Markdown',
             reply_markup=get_main_menu_keyboard()
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error sending timeout message: {e}")
     
     if user_id in user_data_store:
         del user_data_store[user_id]
@@ -297,6 +315,7 @@ async def check_payment_background(user_id, invoice_id, context):
         del pending_payments[invoice_id]
 
 async def back_to_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка возврата в главное меню"""
     query = update.callback_query
     await query.answer()
     
