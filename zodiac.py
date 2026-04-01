@@ -1,0 +1,28 @@
+# Знаки зодиака и их даты
+ZODIAC_SIGNS = {
+    'овен': {'dates': '21 марта - 19 апреля', 'emoji': '♈️', 'name_ru': 'Овен'},
+    'телец': {'dates': '20 апреля - 20 мая', 'emoji': '♉️', 'name_ru': 'Телец'},
+    'близнецы': {'dates': '21 мая - 20 июня', 'emoji': '♊️', 'name_ru': 'Близнецы'},
+    'рак': {'dates': '21 июня - 22 июля', 'emoji': '♋️', 'name_ru': 'Рак'},
+    'лев': {'dates': '23 июля - 22 августа', 'emoji': '♌️', 'name_ru': 'Лев'},
+    'дева': {'dates': '23 августа - 22 сентября', 'emoji': '♍️', 'name_ru': 'Дева'},
+    'весы': {'dates': '23 сентября - 22 октября', 'emoji': '♎️', 'name_ru': 'Весы'},
+    'скорпион': {'dates': '23 октября - 21 ноября', 'emoji': '♏️', 'name_ru': 'Скорпион'},
+    'стрелец': {'dates': '22 ноября - 21 декабря', 'emoji': '♐️', 'name_ru': 'Стрелец'},
+    'козерог': {'dates': '22 декабря - 19 января', 'emoji': '♑️', 'name_ru': 'Козерог'},
+    'водолей': {'dates': '20 января - 18 февраля', 'emoji': '♒️', 'name_ru': 'Водолей'},
+    'рыбы': {'dates': '19 февраля - 20 марта', 'emoji': '♓️', 'name_ru': 'Рыбы'}
+}
+
+def get_zodiac_signs_keyboard():
+    """Создание клавиатуры с знаками зодиака"""
+    keyboard = []
+    row = []
+    for i, sign in enumerate(ZODIAC_SIGNS.keys(), 1):
+        row.append(sign.capitalize())
+        if i % 3 == 0:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    return keyboard
