@@ -15,15 +15,17 @@ ASK_NAME, ASK_GENDER, ASK_QUESTION, ASK_ZODIAC = range(4)
 user_data_store = {}
 pending_payments = {}
 
-# Клавиатуры
+# === КРАСИВЫЕ КЛАВИАТУРЫ ===
 def get_gender_keyboard():
+    """Клавиатура выбора пола с эмодзи"""
     keyboard = [
-        [KeyboardButton("👨 Мужской"), KeyboardButton("👩 Женский")],
+        [KeyboardButton("👨‍🦰 Мужской"), KeyboardButton("👩‍🦰 Женский")],
         [KeyboardButton("⚧️ Другой / Не указывать")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
 def get_question_keyboard():
+    """Клавиатура выбора вопроса"""
     keyboard = [
         [KeyboardButton("💼 Работа и карьера"), KeyboardButton("💕 Отношения и любовь")],
         [KeyboardButton("🏃‍♂️ Здоровье и энергия"), KeyboardButton("🎯 Цели и мечты")],
@@ -32,6 +34,7 @@ def get_question_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
 def get_main_keyboard():
+    """Главная клавиатура"""
     keyboard = [
         [KeyboardButton("🔮 Получить предсказание")],
         [KeyboardButton("ℹ️ Помощь")]
@@ -64,23 +67,20 @@ def register_handlers(application):
     application.add_handler(MessageHandler(filters.Regex('^🔮 Получить предсказание$'), predict))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /start"""
+    """Приветствие с красивым оформлением"""
     user = update.effective_user
-    
     create_user(user.id, user.username, user.first_name, user.last_name)
-    logger.info(f"User {user.id} started the bot")
+    logger.info(f"User {user.id} started")
     
     welcome_text = (
-        f"🌟 *Привет, {user.first_name}!*\n\n"
-        f"✨ Я — *Бот-предсказатель* ✨\n\n"
-        f"🔮 Я помогу тебе заглянуть в будущее,\n"
-        f"получить мудрый совет и вдохновение!\n\n"
-        f"💰 *Стоимость:* 0.10 USDT\n\n"
-        f"🎁 *Что ты получишь:*\n"
-        f"• 🎯 Персональное предсказание\n"
-        f"• 🌟 Юмористический гороскоп\n"
-        f"• 💫 Заряд позитива и уверенности\n\n"
-        f"👇 *Нажми кнопку ниже, чтобы начать* 👇"
+        f"✨ *Добро пожаловать, {user.first_name}!* ✨\n\n"
+        f"🌟 Я — *Бот-предсказатель* 🌟\n"
+        f"🔮 Ваш личный проводник в мир тайн и вдохновения.\n\n"
+        f"💎 *Что вы получите всего за 0.10 USDT?*\n"
+        f"• 🎯 *Персональное предсказание* – ответ на ваш вопрос\n"
+        f"• 🌙 *Юмористический гороскоп* – шутливый взгляд на день\n"
+        f"• 💫 *Заряд позитива* – энергия на весь день\n\n"
+        f"👇 *Нажмите кнопку, чтобы начать* 👇"
     )
     
     await update.message.reply_text(
@@ -90,44 +90,42 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Начало процесса предсказания"""
+    """Начало диалога"""
     user_id = update.effective_user.id
     user_data_store[user_id] = {}
     
     await update.message.reply_text(
-        "✨ *Давай создадим твое персональное предсказание!* ✨\n\n"
-        "📝 *Как тебя зовут?*",
+        "✨ *Создаём ваше персональное предсказание* ✨\n\n"
+        "📝 *Как вас зовут?* (можно указать имя или псевдоним)",
         parse_mode='Markdown'
     )
-    
     return ASK_NAME
 
 async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получаем имя"""
+    """Принимаем имя"""
     user_id = update.effective_user.id
     user_name = update.message.text.strip()
     user_data_store[user_id]['name'] = user_name
     
     await update.message.reply_text(
-        f"🌟 *Отлично, {user_name}!* 🌟\n\n"
-        f"👤 *Укажи свой пол*",
+        f"🌟 *Приятно познакомиться, {user_name}!* 🌟\n\n"
+        f"👤 *Укажите ваш пол* – это поможет сделать предсказание точнее.",
         parse_mode='Markdown',
         reply_markup=get_gender_keyboard()
     )
-    
     return ASK_GENDER
 
 async def ask_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получаем пол"""
+    """Принимаем пол"""
     user_id = update.effective_user.id
     gender_text = update.message.text
     
     if "Мужской" in gender_text:
         gender = "male"
-        gender_emoji = "👨"
+        gender_emoji = "👨‍🦰"
     elif "Женский" in gender_text:
         gender = "female"
-        gender_emoji = "👩"
+        gender_emoji = "👩‍🦰"
     else:
         gender = "other"
         gender_emoji = "⚧️"
@@ -137,21 +135,21 @@ async def ask_gender(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"{gender_emoji} *Принято!*\n\n"
-        f"💭 *Что тебя волнует?*",
+        f"💭 *Расскажите, что вас волнует?* Выберите вариант или напишите свой вопрос.",
         parse_mode='Markdown',
         reply_markup=get_question_keyboard()
     )
-    
     return ASK_QUESTION
 
 async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получаем вопрос"""
+    """Принимаем вопрос"""
     user_id = update.effective_user.id
     user_question = update.message.text.strip()
-    
+    # Очищаем от эмодзи кнопок
     question_clean = user_question.replace("💼 ", "").replace("💕 ", "").replace("🏃‍♂️ ", "").replace("🎯 ", "").replace("❓ ", "")
     user_data_store[user_id]['question'] = question_clean
     
+    # Создаём красивую inline-клавиатуру с знаками зодиака
     keyboard = []
     for sign, info in ZODIAC_SIGNS.items():
         keyboard.append([InlineKeyboardButton(
@@ -160,15 +158,15 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )])
     
     await update.message.reply_text(
-        "🔮 *Выбери свой знак зодиака* 🔮",
+        "🔮 *Выберите свой знак зодиака* 🔮\n\n"
+        "Это нужно для вашего персонального гороскопа.",
         parse_mode='Markdown',
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
-    
     return ASK_ZODIAC
 
 async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получаем знак зодиака и создаем счет"""
+    """Создаём инвойс после выбора знака"""
     query = update.callback_query
     await query.answer()
     
@@ -177,6 +175,7 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_store[user_id]['zodiac'] = zodiac_sign
     update_user_zodiac(user_id, zodiac_sign)
     
+    # Создаём счёт
     invoice = crypto_pay.create_invoice(0.10, "USDT", "Предсказание")
     
     if invoice:
@@ -188,14 +187,16 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await query.edit_message_text(
             f"🌟 *Готово!* 🌟\n\n"
-            f"💰 *Сумма:* 0.10 USDT\n"
+            f"💰 *Сумма к оплате:* 0.10 USDT\n"
             f"🪙 *Валюта:* USDT (TRC20)\n\n"
-            f"🔽 *Нажми на кнопку для оплаты* 🔽\n\n"
-            f"⏳ *После оплаты предсказание придет автоматически!*",
+            f"🔽 *Нажмите на кнопку для оплаты* 🔽\n\n"
+            f"⏳ *После подтверждения оплаты предсказание придёт автоматически.*\n"
+            f"Это займёт 1–2 минуты.",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
+        # Возвращаем главное меню
         await context.bot.send_message(
             chat_id=user_id,
             text="🔙 *Главное меню*",
@@ -207,7 +208,7 @@ async def ask_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     else:
         await query.edit_message_text(
-            "❌ *Ошибка создания счета*\nПопробуйте позже",
+            "❌ *Ошибка создания счёта*\n\nПожалуйста, попробуйте позже.",
             parse_mode='Markdown'
         )
         return ConversationHandler.END
@@ -216,36 +217,39 @@ async def check_payment_background(user_id, invoice_id, context):
     """Фоновая проверка оплаты"""
     for _ in range(60):  # 5 минут
         await asyncio.sleep(5)
-        
         if user_id not in user_data_store:
             return
         
         if crypto_pay.check_payment(invoice_id):
             user_data = user_data_store.get(user_id)
             if user_data and user_data.get('invoice_id') == invoice_id:
+                # Генерируем предсказание и гороскоп
                 prediction = generate_prediction({
                     'name': user_data['name'],
                     'gender': user_data.get('gender', 'other'),
                     'question': user_data['question'],
                     'zodiac': user_data['zodiac']
                 })
-                
                 horoscope = generate_horoscope(user_data['zodiac'])
+                
                 zodiac_emoji = ZODIAC_SIGNS[user_data['zodiac']]['emoji']
                 zodiac_name = ZODIAC_SIGNS[user_data['zodiac']]['name_ru']
                 
+                # Сохраняем в БД
                 save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
                 save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
                 
+                # Красивое оформление результата
                 result_text = (
                     f"✅ *ОПЛАТА ПОЛУЧЕНА!* ✅\n\n"
-                    f"✨ *ВОТ ТВОЕ ПРЕДСКАЗАНИЕ* ✨\n\n"
+                    f"✨ *ВАШЕ ПРЕДСКАЗАНИЕ* ✨\n\n"
                     f"{prediction}\n\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                     f"{zodiac_emoji} *ГОРОСКОП ДЛЯ {zodiac_name.upper()}* {zodiac_emoji}\n\n"
                     f"{horoscope}\n\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"💫 *Спасибо, что доверился мне!*"
+                    f"💫 *Благодарю за доверие!*\n"
+                    f"🔮 Если хотите узнать больше, нажмите кнопку ниже."
                 )
                 
                 keyboard = [[InlineKeyboardButton("🔮 Новое предсказание", callback_data="new_prediction")]]
@@ -261,12 +265,13 @@ async def check_payment_background(user_id, invoice_id, context):
                 del pending_payments[invoice_id]
                 return
     
+    # Таймаут
     await context.bot.send_message(
         chat_id=user_id,
-        text="⏰ *Время ожидания оплаты истекло*\nПопробуйте заново: /predict",
-        parse_mode='Markdown'
+        text="⏰ *Время ожидания оплаты истекло*\n\nПопробуйте заново, нажав /predict.",
+        parse_mode='Markdown',
+        reply_markup=get_main_keyboard()
     )
-    
     if user_id in user_data_store:
         del user_data_store[user_id]
     if invoice_id in pending_payments:
@@ -289,11 +294,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del user_data_store[user_id]
     
     await update.message.reply_text(
-        "❌ *Операция отменена*",
+        "❌ *Операция отменена*\n\nВы можете начать заново через главное меню.",
         parse_mode='Markdown',
         reply_markup=get_main_keyboard()
     )
-    
     return ConversationHandler.END
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -301,18 +305,25 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "📚 *ПОМОЩЬ ПО БОТУ* 📚\n\n"
         "🔮 *Как получить предсказание:*\n\n"
-        "1️⃣ Нажми 🔮 Получить предсказание\n"
-        "2️⃣ Укажи имя и пол\n"
-        "3️⃣ Расскажи, что тебя волнует\n"
-        "4️⃣ Выбери знак зодиака\n"
-        "5️⃣ Оплати 0.10 USDT\n"
-        "6️⃣ Жди автоматического предсказания!\n\n"
-        "💰 *Оплата:* USDT (TRC20)\n\n"
+        "1️⃣ Нажмите кнопку «🔮 Получить предсказание»\n"
+        "2️⃣ Укажите имя и пол\n"
+        "3️⃣ Расскажите, что вас волнует (или выберите вариант)\n"
+        "4️⃣ Выберите знак зодиака\n"
+        "5️⃣ Оплатите 0.10 USDT через CryptoPay\n"
+        "6️⃣ Ждите автоматической доставки предсказания!\n\n"
+        "💰 *Оплата:*\n"
+        "• Валюта: USDT (сеть TRC20)\n"
+        "• Сумма: 0.10 USDT\n"
+        "• Предсказание придёт автоматически после подтверждения\n\n"
         "⚡ *Команды:*\n"
-        "/start — Начать\n"
-        "/predict — Предсказание\n"
-        "/help — Помощь\n"
-        "/cancel — Отмена"
+        "/start — начать работу\n"
+        "/predict — получить предсказание\n"
+        "/help — эта справка\n"
+        "/cancel — отменить текущую операцию\n\n"
+        "✨ *Приятного использования!*"
     )
-    
-    await update.message.reply_text(help_text, parse_mode='Markdown', reply_markup=get_main_keyboard())
+    await update.message.reply_text(
+        help_text,
+        parse_mode='Markdown',
+        reply_markup=get_main_keyboard()
+    )
