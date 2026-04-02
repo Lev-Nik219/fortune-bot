@@ -44,7 +44,7 @@ def get_start_menu_text(user_name):
         f"✨ *Добро пожаловать, {user_name}!* ✨\n\n"
         f"🌟 Я — *Бот-предсказатель* 🌟\n"
         f"🔮 Ваш личный проводник в мир тайн и вдохновения.\n\n"
-        f"💎 *Что вы получите всего за 0.10 USDT?*\n"
+        f"💎 *Что вы получите всего за {config.PRICE_USDT} USDT?*\n"
         f"• 🎯 *Персональное предсказание* – ответ на ваш вопрос\n"
         f"• 🌙 *Юмористический гороскоп* – шутливый взгляд на день\n"
         f"• 💫 *Заряд позитива* – энергия на весь день\n\n"
@@ -58,7 +58,7 @@ def get_main_menu_text(user_name):
         f"✨ *Добро пожаловать обратно, {user_name}!* ✨\n\n"
         f"🌟 Я — *Бот-предсказатель* 🌟\n"
         f"🔮 Ваш личный проводник в мир тайн и вдохновения.\n\n"
-        f"💎 *Что вы получите всего за 0.10 USDT?*\n"
+        f"💎 *Что вы получите всего за {config.PRICE_USDT} USDT?*\n"
         f"• 🎯 *Персональное предсказание* – ответ на ваш вопрос\n"
         f"• 🌙 *Юмористический гороскоп* – шутливый взгляд на день\n"
         f"• 💫 *Заряд позитива* – энергия на весь день\n\n"
@@ -225,8 +225,8 @@ async def get_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
             zodiac_emoji = ZODIAC_SIGNS[zodiac]['emoji']
             zodiac_name = ZODIAC_SIGNS[zodiac]['name_ru']
             
-            save_prediction(user_id, 'prediction', prediction, zodiac, 0.10)
-            save_prediction(user_id, 'horoscope', horoscope, zodiac, 0.10)
+            save_prediction(user_id, 'prediction', prediction, zodiac, config.PRICE_USDT)
+            save_prediction(user_id, 'horoscope', horoscope, zodiac, config.PRICE_USDT)
             
             result_text = (
                 f"✨ *ВАШЕ ПРЕДСКАЗАНИЕ* ✨\n\n"
@@ -251,8 +251,8 @@ async def get_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ConversationHandler.END
         
         # РЕАЛЬНАЯ ОПЛАТА
-        logger.info(f"Creating invoice for user {user_id}")
-        invoice = crypto_pay.create_invoice(0.10, "USDT", "Предсказание")
+        logger.info(f"Creating invoice for user {user_id}, amount: {config.PRICE_USDT} USDT")
+        invoice = crypto_pay.create_invoice(config.PRICE_USDT, "USDT", "Предсказание")
         
         if invoice:
             invoice_id = invoice['invoice_id']
@@ -263,11 +263,11 @@ async def get_zodiac(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'created_at': asyncio.get_event_loop().time()
             }
             
-            keyboard = [[InlineKeyboardButton(f"💳 Оплатить 0.10 USDT", url=invoice['pay_url'])]]
+            keyboard = [[InlineKeyboardButton(f"💳 Оплатить {config.PRICE_USDT} USDT", url=invoice['pay_url'])]]
             
             await query.edit_message_text(
                 f"🌟 *Готово!* 🌟\n\n"
-                f"💰 *Сумма к оплате:* 0.10 USDT\n"
+                f"💰 *Сумма к оплате:* {config.PRICE_USDT} USDT\n"
                 f"🪙 *Валюта:* USDT (TRC20)\n\n"
                 f"🔽 *Нажмите на кнопку для оплаты* 🔽\n\n"
                 f"⏳ *После подтверждения оплаты предсказание придёт автоматически.*\n"
@@ -331,8 +331,8 @@ async def check_payment_background(user_id, invoice_id, context):
                 zodiac_emoji = ZODIAC_SIGNS[user_data['zodiac']]['emoji']
                 zodiac_name = ZODIAC_SIGNS[user_data['zodiac']]['name_ru']
                 
-                save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], 0.10)
-                save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], 0.10)
+                save_prediction(user_id, 'prediction', prediction, user_data['zodiac'], config.PRICE_USDT)
+                save_prediction(user_id, 'horoscope', horoscope, user_data['zodiac'], config.PRICE_USDT)
                 
                 result_text = (
                     f"✅ *ОПЛАТА ПОЛУЧЕНА!* ✅\n\n"
@@ -430,16 +430,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "2️⃣ Укажите имя и пол\n"
         "3️⃣ Расскажите, что вас волнует (или выберите вариант)\n"
         "4️⃣ Выберите знак зодиака\n"
-        "5️⃣ Оплатите 0.10 USDT через CryptoPay\n"
+        "5️⃣ Оплатите {price} USDT через CryptoPay\n"
         "6️⃣ Ждите автоматической доставки предсказания!\n\n"
-        "💰 *Оплата:* USDT (сеть TRC20), сумма 0.10 USDT\n\n"
+        "💰 *Оплата:* USDT (сеть TRC20), сумма {price} USDT\n\n"
         "⚡ *Команды:*\n"
         "/start — начать работу\n"
         "/predict — получить предсказание\n"
         "/help — эта справка\n"
         "/cancel — отменить текущую операцию\n\n"
         "✨ *Приятного использования!*"
-    )
+    ).format(price=config.PRICE_USDT)
+    
     await update.message.reply_text(
         help_text,
         parse_mode='Markdown',
