@@ -7,22 +7,26 @@ import config
 
 # Hugging Face availability
 HF_AVAILABLE = False
+HF_WORKING = False
+
 try:
     from huggingface_predictions import hf
     HF_AVAILABLE = bool(config.HF_API_KEY)
     if HF_AVAILABLE:
-        logger.info("✅ Hugging Face predictor ready - will generate unique predictions")
-        logger.info("🤖 Hugging Face AI status: ACTIVE")
+        # Проверяем, работает ли AI
+        test_result = hf.generate_prediction({'name': 'test', 'question': 'test'})
+        if test_result:
+            HF_WORKING = True
+            logger.info("✅ Hugging Face AI is WORKING and ready!")
+        else:
+            logger.warning("⚠️ Hugging Face API not responding - will use templates")
     else:
-        logger.info("ℹ️ Using template predictions (HuggingFace not available)")
-        logger.info("🤖 Hugging Face AI status: INACTIVE (using templates)")
-except ImportError:
-    logger.info("ℹ️ Using template predictions (HuggingFace library not installed)")
-    logger.info("🤖 Hugging Face AI status: INACTIVE (library missing)")
+        logger.info("ℹ️ Using template predictions (HuggingFace not configured)")
+except ImportError as e:
+    logger.info(f"ℹ️ Using template predictions (import error: {e})")
 except Exception as e:
     logger.error(f"HuggingFace error: {e}")
     logger.info("ℹ️ Using template predictions")
-    logger.info("🤖 Hugging Face AI status: INACTIVE (error)")
 
 # === РАСШИРЕННЫЕ ШАБЛОНЫ ПРЕДСКАЗАНИЙ (по 8+ вариантов для каждой категории) ===
 PREDICTION_TEMPLATES = {
@@ -99,7 +103,7 @@ HOROSCOPE_TEMPLATES = {
         "🌸 Звёзды говорят о романтическом вечере. Если вы в паре – ожидайте приятных сюрпризов. Если одиноки – возможна встреча, которая перерастёт в нечто большее. Будьте открыты к новым чувствам и не бойтесь проявлять инициативу.",
     ],
     'лев': [
-        "🦁 Сегодня вы – звезда вечеринки! Ваша харизма привлекает внимание, и не удивляйтесь, если кто-то захочет познакомиться поближе. Используйте этот день для самовыражения и смелых решений. В карьере возможни неожиданные предложения, которые потребуют от вас лидерских качеств. Вечером поберегите силы для завтрашних свершений.",
+        "🦁 Сегодня вы – звезда вечеринки! Ваша харизма привлекает внимание, и не удивляйтесь, если кто-то захочет познакомиться поближе. Используйте этот день для самовыражения и смелых решений. В карьере возможны неожиданные предложения, которые потребуют от вас лидерских качеств. Вечером поберегите силы для завтрашних свершений.",
         "👑 Ваша щедрость сегодня будет вознаграждена. Делись теплом и вниманием – оно вернётся к вам сторицей. Вы можете стать центром притяжения для других, и это принесёт пользу в коллективных делах. В личных отношениях избегайте излишней гордости, и гармония будет сохранена.",
         "🎭 Сегодня ваш день для самовыражения. Покажите миру, на что вы способны! Не бойтесь рисковать и быть в центре внимания. Однако помните, что истинное величие – в умении слушать других. Вечер идеален для культурных мероприятий или творческих занятий.",
         "👑 Звёзды предсказывают финансовую удачу. Возможно, вы получите неожиданный доход или выгодное предложение. Не спешите тратить всё сразу – лучше инвестируйте в своё развитие. Ваша уверенность в себе привлечёт ещё больше возможностей.",
@@ -162,20 +166,26 @@ def get_seed_from_user(user_data):
     return int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % 10000
 
 def generate_prediction(user_data):
-    """Генерация уникального предсказания (всегда разное)"""
+    """Генерация уникального предсказания с приоритетом AI"""
     user_name = user_data.get('name', 'друг')
     user_gender = user_data.get('gender', 'other')
     user_question = user_data.get('question', '')
     
-    # Пробуем Hugging Face
-    if HF_AVAILABLE:
+    # Пробуем AI в первую очередь
+    if HF_WORKING:
         try:
+            logger.info(f"🤖 Attempting AI prediction for {user_name}")
             prediction = hf.generate_prediction(user_data)
-            if prediction and len(prediction.split()) > 30:
-                logger.info("Using Hugging Face prediction")
+            if prediction and len(prediction.split()) > 20:
+                logger.info(f"✅ AI prediction successful for {user_name}")
                 return f"✨ {prediction}"
+            else:
+                logger.warning(f"⚠️ AI prediction too short or empty, using template")
         except Exception as e:
-            logger.error(f"Hugging Face error: {e}")
+            logger.error(f"AI prediction error: {e}")
+    
+    # Fallback на шаблоны
+    logger.info(f"📝 Using template prediction for {user_name}")
     
     # Определяем категорию
     category = 'general'
@@ -188,15 +198,14 @@ def generate_prediction(user_data):
         elif any(w in q for w in ['здоров', 'энерг', 'спорт', 'сон']):
             category = 'health'
     
-    # Получаем уникальное seed для рандомизации
-    seed = get_seed_from_user(user_data)
+    # Генерируем уникальный seed на основе данных пользователя и времени
+    seed = int(hashlib.md5(f"{user_name}_{user_gender}_{user_question}_{datetime.now().timestamp()}".encode()).hexdigest(), 16) % 10000
     random.seed(seed)
     
-    # Выбираем случайный шаблон из категории
     templates = PREDICTION_TEMPLATES.get(category, PREDICTION_TEMPLATES['general'])
     template = random.choice(templates)
     
-    # Сбрасываем seed, чтобы не влиять на остальной код
+    # Сбрасываем seed
     random.seed()
     
     # Разные варианты обращения
@@ -215,23 +224,29 @@ def generate_prediction(user_data):
     return prediction
 
 def generate_horoscope(zodiac_sign):
-    """Генерация уникального гороскопа (всегда разный)"""
+    """Генерация уникального гороскопа с приоритетом AI"""
     zodiac_lower = zodiac_sign.lower()
     
-    # Пробуем Hugging Face
-    if HF_AVAILABLE:
+    # Пробуем AI в первую очередь
+    if HF_WORKING:
         try:
+            logger.info(f"🤖 Attempting AI horoscope for {zodiac_sign}")
             horoscope = hf.generate_horoscope(zodiac_sign)
-            if horoscope and len(horoscope.split()) > 20:
-                logger.info("Using Hugging Face horoscope")
+            if horoscope and len(horoscope.split()) > 15:
+                logger.info(f"✅ AI horoscope successful for {zodiac_sign}")
                 zodiac_emoji = {
                     'овен': '🔥', 'телец': '🍰', 'близнецы': '🗣', 'рак': '🏠',
                     'лев': '🦁', 'дева': '📋', 'весы': '⚖️', 'скорпион': '🦂',
                     'стрелец': '🎯', 'козерог': '📈', 'водолей': '💡', 'рыбы': '🎨'
                 }.get(zodiac_lower, '✨')
                 return f"{zodiac_emoji} {horoscope}"
+            else:
+                logger.warning(f"⚠️ AI horoscope too short or empty, using template")
         except Exception as e:
-            logger.error(f"Hugging Face horoscope error: {e}")
+            logger.error(f"AI horoscope error: {e}")
+    
+    # Fallback на шаблоны
+    logger.info(f"📝 Using template horoscope for {zodiac_sign}")
     
     # Используем время для рандомизации
     random.seed(int(datetime.now().timestamp() * 1000) % 100000)
