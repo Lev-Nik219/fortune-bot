@@ -7,19 +7,11 @@ class HuggingFacePredictor:
     def __init__(self, api_key):
         if api_key:
             try:
-                self.client = InferenceClient(token=api_key)
+                # Используем новый URL для Hugging Face
+                self.client = InferenceClient(token=api_key, timeout=30)
                 self.available = True
                 logger.info("✅ HuggingFace API initialized successfully")
-                # Тестовый запрос для проверки
-                try:
-                    test = self.client.text_generation(
-                        "Test",
-                        model="HuggingFaceH4/zephyr-7b-beta",
-                        max_new_tokens=5
-                    )
-                    logger.info("✅ HuggingFace API test passed")
-                except Exception as test_e:
-                    logger.warning(f"HuggingFace API test failed: {test_e}")
+                logger.info("📍 Using endpoint: router.huggingface.co")
             except Exception as e:
                 logger.error(f"Failed to initialize HuggingFace: {e}")
                 self.available = False
@@ -37,28 +29,28 @@ class HuggingFacePredictor:
             user_question = user_data.get('question', '')
             user_zodiac = user_data.get('zodiac', '')
             
-            # Используем более стабильную модель
-            prompt = f"""Ты — мудрый и добрый предсказатель. Напиши предсказание для {user_name}.
+            # Упрощенный промпт для более быстрой генерации
+            prompt = f"""Ты — мудрый предсказатель. Напиши предсказание для {user_name}.
 Вопрос: {user_question if user_question else 'о будущем'}
-Знак зодиака: {user_zodiac if user_zodiac else 'не указан'}
 
 Требования:
-- Используй имя человека
-- Напиши 3-4 предложения
-- Будь оптимистичен и вдохновляющ
-- Язык: русский
+- 3-4 предложения
+- Оптимистичный тон
+- На русском языке
 
 Предсказание:"""
             
+            # Используем более легкую и стабильную модель
             response = self.client.text_generation(
                 prompt,
-                model="HuggingFaceH4/zephyr-7b-beta",  # Более стабильная модель
+                model="google/flan-t5-large",
                 max_new_tokens=200,
                 temperature=0.8,
-                do_sample=True
+                do_sample=True,
+                wait_for_model=True
             )
             
-            if response and len(response.split()) > 20:
+            if response and len(response.split()) > 15:
                 logger.info(f"✅ Hugging Face generated prediction for {user_name}")
                 return response.strip()
             return None
@@ -73,20 +65,21 @@ class HuggingFacePredictor:
             return None
             
         try:
-            prompt = f"""Напиши юмористический гороскоп для знака {zodiac_sign} на сегодня.
+            prompt = f"""Напиши короткий юмористический гороскоп для знака {zodiac_sign}.
 Требования:
-- Короткий, 2-3 предложения
-- С юмором и легкой иронией
-- Язык: русский
+- 2-3 предложения
+- С юмором
+- На русском языке
 
 Гороскоп:"""
             
             response = self.client.text_generation(
                 prompt,
-                model="HuggingFaceH4/zephyr-7b-beta",
+                model="google/flan-t5-large",
                 max_new_tokens=150,
                 temperature=0.85,
-                do_sample=True
+                do_sample=True,
+                wait_for_model=True
             )
             
             if response and len(response.split()) > 10:
